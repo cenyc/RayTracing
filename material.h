@@ -7,7 +7,7 @@
 
 #include "ray.h"
 #include "hitable_list.h"
-
+#include "light.h"
 
 
 vec3 random_in_unit_sphere() {
@@ -34,7 +34,6 @@ class lambertian: public material {
 public:
     lambertian(const vec3& a): albedo(a) {}
     virtual bool scatter(const ray& r_in, const hit_record& rec, vec3& attenuation, ray& scattered) const {
-
         vec3 target = rec.p + rec.normal + random_in_unit_sphere();
         scattered = ray(rec.p, target-rec.p);
         attenuation = albedo;
@@ -49,14 +48,39 @@ public:
  */
 class metal: public material {
 public:
-    metal(const vec3& a): albedo(a) {};
+    metal(const vec3& a, float f): albedo(a) { fuzz = f < 1? f:1;};
     virtual bool scatter(const ray& r_in, const hit_record& rec, vec3& attenuation, ray& scattered) const {
         vec3 reflected = reflect(unit_vector(r_in.direction()), rec.normal);
-        scattered = ray(rec.p, reflected);
+        scattered = ray(rec.p, reflected + fuzz*random_in_unit_sphere());
         attenuation = albedo;
         return (dot(scattered.direction(), rec.normal) > 0);
     }
+
     vec3 albedo;
+    float fuzz;
+};
+
+class lightModel {
+public:
+    lightModel(float kIn, float nsIn): k(kIn), ns(nsIn) {};
+    float phong(const light &light, const ray &ray_in, const hit_record &record);
+
+    float k; //材质的反光系数
+    float ns; //高光系数
+};
+
+float lightModel::phong(const light &light, const ray &ray_in,const hit_record &record) {
+    vec3 l = light.getOrigin() - record.p;
+    l.make_unit_vector();
+    vec3 r = 2*dot(record.normal, l)*record.normal - l; //反射光方向
+    float I = k*light.getIntensity()*pow(dot(-unit_vector(ray_in.direction()), unit_vector(r)), ns);
+
+    if (I > 1) {
+        I = 1.0;
+    } else if (I < 0) {
+        I = 0.0009;
+    }
+    return I;
 };
 
 #endif //RAYTRACING_MATERIAL_H
